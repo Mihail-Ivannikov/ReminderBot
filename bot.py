@@ -39,7 +39,6 @@ def buttons_click_handler(message):
         'Check existing tasks': check_command_handler,
         'Check tasks for week': week_command_handler
     }
-    print(message.text)
     if(message.text in buttonMessages):
         func = buttonMessages[message.text]
         func(message) 
@@ -59,7 +58,6 @@ def get_event_name(message):
      bot.register_next_step_handler(msg, get_event_date)
 
 def get_event_date(message):
-    print(date_validator(message.text))
     if(date_validator(message.text) == True):
         msg = bot.reply_to(message, f'The date of event is: {message.text}\n Now please enter the time in format: HH:MM')
         bot.register_next_step_handler(msg, get_event_time)
@@ -68,7 +66,12 @@ def get_event_date(message):
         bot.register_next_step_handler(msg, get_event_date)
 
 def get_event_time(message):
-    bot.reply_to(message, f'The the of event is: {message.text}\n The event is written!')
+    if(time_validator(message.text) == True):
+        msg = bot.reply_to(message, f'The time of event is: {message.text}\n The event is written!')
+    else:
+        msg = bot.reply_to(message, f'The time is invalid! Try again. The time format should be HH:MM')
+        bot.register_next_step_handler(msg, get_event_date)
+
 
 
 
@@ -86,7 +89,7 @@ def week_command_handler(message):
 
 def date_validator(date_text):
     date = date_text
-    if(len(date) > 10):
+    if(len(date) != 10):
         return False
     numbersFromDate = date[0:2]+date[3:5] + date[6:10]
     try:
@@ -95,6 +98,19 @@ def date_validator(date_text):
         return False
     dotsFromDate = date[2]+date[5]
     if(dotsFromDate != '..'):
+        return False
+    return True
+
+def time_validator(time_text):
+    time = time_text
+    if(len(time) != 5):
+        return False
+    numbersFromDate = time[0:2]+time[3:5]
+    try:
+        int(numbersFromDate)
+    except:
+        return False
+    if(time[2] != ':'):
         return False
     return True
 
