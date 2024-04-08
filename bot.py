@@ -1,7 +1,10 @@
 import telebot
 from telebot import types
-
+import string
 import time
+
+import re
+from datetime import datetime
 
 
 
@@ -56,8 +59,13 @@ def get_event_name(message):
      bot.register_next_step_handler(msg, get_event_date)
 
 def get_event_date(message):
-    msg = bot.reply_to(message, f'The date of event is: {message.text}\n Now please enter the time in format: HH:MM')
-    bot.register_next_step_handler(msg, get_event_time)
+    print(date_validator(message.text))
+    if(date_validator(message.text) == True):
+        msg = bot.reply_to(message, f'The date of event is: {message.text}\n Now please enter the time in format: HH:MM')
+        bot.register_next_step_handler(msg, get_event_time)
+    else:
+        msg = bot.reply_to(message, f'The date is invalid! Please try again. the format should be DD.MM.YYYY')
+        bot.register_next_step_handler(msg, get_event_date)
 
 def get_event_time(message):
     bot.reply_to(message, f'The the of event is: {message.text}\n The event is written!')
@@ -74,6 +82,21 @@ def check_command_handler(message):
 def week_command_handler(message):
     
     print('week')
+
+
+def date_validator(date_text):
+    date = date_text
+    if(len(date) > 10):
+        return False
+    numbersFromDate = date[0:2]+date[3:5] + date[6:10]
+    try:
+        int(numbersFromDate)
+    except:
+        return False
+    dotsFromDate = date[2]+date[5]
+    if(dotsFromDate != '..'):
+        return False
+    return True
 
 
 @bot.message_handler()
