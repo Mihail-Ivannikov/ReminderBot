@@ -1,9 +1,8 @@
 import telebot
 from telebot import types
-import string
 import time
+from functools import partial
 
-import re
 from datetime import datetime
 
 
@@ -15,6 +14,8 @@ bot = telebot.TeleBot(token)
 
 
 def start_command_handler(message):
+    menu = types.BotCommandScope()
+    start = types.BotCommand('/start', 'Start the bot!')
     
     reply_keyboard = types.ReplyKeyboardMarkup()
 
@@ -55,22 +56,27 @@ def create_command_handler(message):
 
 def get_event_name(message):
      msg = bot.reply_to(message, f'The name of event is: {message.text}\n Now please enter date in format: DD.MM.YYYY')
-     bot.register_next_step_handler(msg, get_event_date)
+     name = message.text
+     bot.register_next_step_handler(msg, partial(get_event_date, name=name))
+     
+     
 
-def get_event_date(message):
+def get_event_date(message, name):
     if(date_validator(message.text) == True):
         msg = bot.reply_to(message, f'The date of event is: {message.text}\n Now please enter the time in format: HH:MM')
-        bot.register_next_step_handler(msg, get_event_time)
+        bot.register_next_step_handler(msg, partial(get_event_time, name= name, date= message.text))
     else:
         msg = bot.reply_to(message, f'The date is invalid! Please try again. the format should be DD.MM.YYYY')
-        bot.register_next_step_handler(msg, get_event_date)
+        bot.register_next_step_handler(msg, partial(get_event_date, name=name))
+   
 
-def get_event_time(message):
+def get_event_time(message, name, date):
     if(time_validator(message.text) == True):
-        msg = bot.reply_to(message, f'The time of event is: {message.text}\n The event is written!')
+        msg = bot.reply_to(message, f'The time of event is: {message.text}\n The event is written! {name, date, message.text}')
     else:
         msg = bot.reply_to(message, f'The time is invalid! Try again. The time format should be HH:MM')
-        bot.register_next_step_handler(msg, get_event_date)
+        bot.register_next_step_handler(msg, partial(get_event_date, name= name, date= date))
+    print(name, date, message.text)
 
 
 
