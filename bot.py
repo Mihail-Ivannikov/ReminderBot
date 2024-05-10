@@ -4,21 +4,26 @@ import time
 from pytz import utc
 from functools import partial
 from apscheduler.schedulers.background import BackgroundScheduler
-import sqlite3
+import mysql.connector
 from datetime import datetime
 from apscheduler.triggers.date import DateTrigger
+import uuid
 
 
 
 scheduler = BackgroundScheduler()
 scheduler.start
 
-conn = sqlite3.connect('reminders.db', check_same_thread=False)
-c = conn.cursor()
-c.execute('''CREATE TABLE IF NOT EXISTS reminders
-             (user_id text, event_name text, event_time text, reminded int)''')
-conn.commit()
+conn = mysql.connector.connect(
+    host="reminders1.c1c8m6ekuail.us-east-1.rds.amazonaws.com",
+    user="admin",
+    password="88888888",
+    database="reminders",
+)
+cursor = conn.cursor()
 
+cursor.execute("CREATE TABLE IF NOT EXISTS reminders (id INT AUTO_INCREMENT PRIMARY KEY, user_id text, event_name text, event_time text, reminded int)")
+conn.commit()
 
 scheduler = BackgroundScheduler()
 scheduler.configure(timezone = utc)
@@ -44,7 +49,6 @@ def start_command_handler(message):
     reply_keyboard.add(checkWeek)
     
     bot.send_message(message.chat.id, f'Hi! You can choose an option', reply_markup=reply_keyboard)
-    bot.register_next_step_handler(message, buttons_click_handler)
 
 
     
@@ -54,16 +58,6 @@ def start_command_handler(message):
 
 # Send a message with the reply keyboard
  
-def buttons_click_handler(message):
-    buttonMessages = {
-        'Create new task': create_command_handler,
-        'Check existing tasks': check_command_handler,
-        'Check tasks for week': week_command_handler
-    }
-    if(message.text in buttonMessages):
-        func = buttonMessages[message.text]
-        func(message) 
-    
 
 def help_command_handler(message):
     text = '<b>/start </b> - starts the bot \n <b>/help </b> - outputs commands \n <b>/createTask </b> - adds your task to database'
@@ -145,12 +139,20 @@ def time_validator(time_text):
         return False
     return True
 
+def delete_expired_reminders():
+    current_time = datetime.utcnow()
+    cursor.execute("DELETE FROM reminders WHERE event_time <= %s OR reminded = 1", (current_time,))
+    conn.commit()
+
 def send_reminder(user_id, event_name):
     # Send the reminder to the user
     bot.send_message(user_id, event_name)
     # Update the database to mark the reminder as sent
-    c.execute("UPDATE reminders SET reminded = 1 WHERE user_id = ? AND event_name = ?", (user_id, event_name))
+    cursor.execute("UPDATE reminders SET reminded = 1 WHERE user_id = %s AND event_name = %s", (user_id, event_name))
     conn.commit()
+    delete_expired_reminders()
+    check_for_new_reminders()
+
 
 def schedule_reminder(user_id, event_name, event_time):
     # Convert event_time to a datetime object
@@ -159,21 +161,68 @@ def schedule_reminder(user_id, event_name, event_time):
     # Convert the string to a datetime object
     datetime_obj = datetime.strptime(event_time, date_format)
     timeOfEvent = datetime_obj.isoformat()
-    print(timeOfEvent)
+    
+    # Generate a UUID for the job ID
+    job_id = str(uuid.uuid4())
+    
     # Schedule the reminder
-    scheduler.add_job(send_reminder, DateTrigger(run_date=timeOfEvent), args=[user_id, event_name], id=f"{user_id}_{event_time}")
+    scheduler.add_job(send_reminder, DateTrigger(run_date=timeOfEvent), args=[user_id, event_name], id=job_id)
 
 def check_for_new_reminders():
-    c.execute("SELECT user_id, event_name, event_time FROM reminders WHERE reminded = 0")
-    for row in c.fetchall():
+    cursor.execute("SELECT user_id, event_name, event_time FROM reminders WHERE reminded = 0")
+    for row in cursor.fetchall():
         user_id, event_name, event_time = row
         schedule_reminder(user_id, event_name, event_time)
 
 def add_reminder(user_id, event_name, event_time):
     print(user_id, event_name,event_time)
-    c.execute("INSERT INTO reminders VALUES (?, ?, ?,?)", (user_id, event_name, event_time, 0))
+    cursor.execute("INSERT INTO reminders (user_id, event_name, event_time, reminded) VALUES (%s, %s, %s, %s)", (user_id, event_name, event_time, 0))
     conn.commit()
-    check_for_new_reminders
+    schedule_reminder(user_id, event_name, event_time)
+
+def check_command_handler(message):
+    # Get user_id from the message
+    user_id = message.chat.id
+    
+    # Retrieve tasks for the user from the database
+    cursor.execute("SELECT event_name, event_time FROM reminders WHERE user_id = %s", (user_id,))
+    tasks = cursor.fetchall()
+    
+    # Format tasks as a list of strings
+    task_list = []
+    for task in tasks:
+        event_name, event_time = task
+        task_list.append(f"{event_name}, {event_time}")
+    
+    # If there are tasks, send them to the user
+    if task_list:
+        task_text = "\n".join(task_list)
+        bot.send_message(user_id, f"Your existing tasks:\n{task_text}")
+    else:
+        bot.send_message(user_id, "You have no existing tasks.") 
+
+def check_day_handler(message):
+    user_id = message.chat.id
+    
+    # Get today's date
+    today_date = datetime.utcnow().date()
+    
+    # Retrieve tasks for today for the user from the database
+    cursor.execute("SELECT event_name, event_time FROM reminders WHERE user_id = %s AND DATE(event_time) = %s", (user_id, today_date))
+    tasks = cursor.fetchall()
+    
+    # Format tasks for today as a list of strings
+    task_list = []
+    for task in tasks:
+        event_name, event_time = task
+        task_list.append(f"{event_name}, {event_time.strftime('%H:%M')}")
+    
+    # If there are tasks for today, send them to the user
+    if task_list:
+        task_text = "\n".join(task_list)
+        bot.send_message(user_id, f"Your tasks for today:\n{task_text}")
+    else:
+        bot.send_message(user_id, "You have no tasks for today.")
 
 def convert_date_format(date_str):
     # Split the original date string by the dot separator
@@ -191,7 +240,10 @@ def command_parse(message):
     command = message.text
     commands = {
         '/start': start_command_handler,
-        '/help': help_command_handler,     
+        '/help': help_command_handler,
+        'Create new task': create_command_handler,
+        'Check existing tasks': check_command_handler,
+        'Check tasks for today': check_day_handler     
     }  
 
     if(command in commands):
@@ -211,8 +263,6 @@ def callback_query(callback):
         func = calls[callback.data]
         func(callback.message)
     
-        
-
 
 
 bot.polling(non_stop=True)
