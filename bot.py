@@ -64,52 +64,70 @@ def help_command_handler(message):
     bot.send_message(message.chat.id, text,parse_mode='html')
 
 def create_command_handler(message):
-    
-    msg = bot.send_message(message.chat.id, 'Please enter the name of action, you want to plan.')
+    # Add Cancel button
+    cancel_button = types.InlineKeyboardButton(text='Cancel', callback_data='cancel')
+    markup = types.InlineKeyboardMarkup()
+    markup.add(cancel_button)
+
+    msg = bot.send_message(message.chat.id, 'Please enter the name of the action you want to plan.', reply_markup=markup)
+   
     bot.register_next_step_handler(msg, get_event_name)
 
 def get_event_name(message):
-     msg = bot.reply_to(message, f'The name of event is: {message.text}\n Now please enter date in format: DD.MM.YYYY')
-     name = message.text
-     bot.register_next_step_handler(msg, partial(get_event_date, name=name))
-     
-     
+    if (message.text=='/cancel'):
+        msg = bot.reply_to(message, f'Action is canceled', reply_markup=markup)
+        return
+    cancel_button = types.InlineKeyboardButton(text='Cancel', callback_data='cancel')
+    markup = types.InlineKeyboardMarkup()
+    markup.add(cancel_button)
+    
+    msg = bot.reply_to(message, f'The name of the event is: {message.text}\nNow please enter the date in the format: DD.MM.YYYY', reply_markup=markup)
+    name = message.text
+    bot.register_next_step_handler(msg, partial(get_event_date, name=name))
 
 def get_event_date(message, name):
-    if(date_validator(message.text) == True):
-        msg = bot.reply_to(message, f'The date of event is: {message.text}\n Now please enter the time in format: HH:MM')
-        bot.register_next_step_handler(msg, partial(get_event_time, name= name, date= message.text))
+    if (message.text=='/cancel'):
+        msg = bot.reply_to(message, f'Action is canceled', reply_markup=markup)
+        return
+    if date_validator(message.text):
+        # Add Cancel button
+        cancel_button = types.InlineKeyboardButton(text='Cancel', callback_data='cancel')
+        markup = types.InlineKeyboardMarkup()
+        markup.add(cancel_button)
+        
+        msg = bot.reply_to(message, f'The date of the event is: {message.text}\nNow please enter the time in the format: HH:MM', reply_markup=markup)
+        bot.register_next_step_handler(msg, partial(get_event_time, name=name, date=message.text))
     else:
-        msg = bot.reply_to(message, f'The date is invalid! Please try again. the format should be DD.MM.YYYY')
+        # Add Cancel button
+        cancel_button = types.InlineKeyboardButton(text='Cancel', callback_data='cancel')
+        markup = types.InlineKeyboardMarkup()
+        markup.add(cancel_button)
+        
+        msg = bot.reply_to(message, f'The date is invalid! Please try again. The format should be DD.MM.YYYY', reply_markup=markup)
         bot.register_next_step_handler(msg, partial(get_event_date, name=name))
    
-
 def get_event_time(message, name, date):
-    if(time_validator(message.text) == True):
+    if (message.text=='/cancel'):
+        msg = bot.reply_to(message, f'Action is canceled', reply_markup=markup)
+        return
+    if time_validator(message.text):
         time = message.text
-        msg = bot.reply_to(message, f'The time of event is: {time}\n The event is written! {name, date, time}')
-        dateAndTime = date+' '+time
-        print(dateAndTime)
-        add_reminder(message.chat.id, name,dateAndTime)
+        msg = bot.reply_to(message, f'The time of the event is: {time}\nThe event is written! {name, date, time}')
+        date_and_time = date + ' ' + time
+        print(date_and_time)
+        add_reminder(message.chat.id, name, date_and_time)
     else:
-        msg = bot.reply_to(message, f'The time is invalid! Try again. The time format should be HH:MM')
-        bot.register_next_step_handler(msg, partial(get_event_date, name= name, date= date))
+        # Add Cancel button
+        cancel_button = types.InlineKeyboardButton(text='Cancel', callback_data='cancel')
+        markup = types.InlineKeyboardMarkup()
+        markup.add(cancel_button)
+        
+        msg = bot.reply_to(message, f'The time is invalid! Try again. The time format should be HH:MM', reply_markup=markup)
+        bot.register_next_step_handler(msg, partial(get_event_time, name=name, date=date))
 
-    print(name, date, message.text)
 
 
 
-
-def check_command_handler(message):
-    
-    print('check')
-    
-
-  
-
-def week_command_handler(message):
-    
-    print('week')
 
 
 def date_validator(date_text):
@@ -250,18 +268,10 @@ def command_parse(message):
          func = commands[command]
          func(message)
     
-@bot.callback_query_handler(func=lambda callback: True)
-def callback_query(callback):
-    
-    calls = {
-        'create': create_command_handler,
-        'check': check_command_handler,
-        'week': week_command_handler
-    }
-    
-    if(callback.data in calls):
-        func = calls[callback.data]
-        func(callback.message)
+@bot.callback_query_handler(func=lambda call: call.data == 'cancel')
+def cancel_action(call):
+    bot.send_message(call.message.chat.id, 'Action is canceled.')
+    bot.clear_step_handler_by_chat_id(chat_id=call.message.chat.id)
     
 
 
