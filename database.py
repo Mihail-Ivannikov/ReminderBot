@@ -1,6 +1,7 @@
 import mysql.connector
 from datetime import datetime
 
+
 conn = mysql.connector.connect(
     host="reminders1.c1c8m6ekuail.us-east-1.rds.amazonaws.com",
     user="admin",
@@ -17,9 +18,9 @@ def mark_reminded(user_id, event_name):
     cursor.execute("UPDATE reminders SET reminded = 1 WHERE user_id = %s AND event_name = %s", (user_id, event_name))
     conn.commit()
 
-def delete_expired_reminders(user_id, event_name):
-    mark_reminded(user_id, event_name)
-    current_time = datetime.utcnow()
+def delete_expired_reminders():
+    current_time = datetime.now()
+    print(current_time)
     cursor.execute("DELETE FROM reminders WHERE event_time <= %s OR reminded = 1", (current_time,))
     conn.commit()
 

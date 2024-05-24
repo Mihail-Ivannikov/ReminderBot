@@ -96,7 +96,8 @@ def is_time_valid(time_text):
 
 def send_reminder_message(user_id, event_name):
     bot.send_message(user_id, "❗❗❗"+event_name+"❗❗❗")
-    delete_expired_reminders(user_id, event_name)
+    mark_reminded(user_id, event_name)
+    delete_expired_reminders()
     check_for_new_reminders()
 
 
@@ -117,8 +118,9 @@ def add_reminder(user_id, event_name, event_time):
     add_reminder_scheduler(user_id, event_name, event_time)
 
 def check_existing_reminders_handler(message):
+    delete_expired_reminders()
     user_id = message.chat.id
-    tasks = find_task(user_id)
+    tasks = find_task(message.chat.id)
     task_list = []
     for task in tasks:
         event_name, event_time = task
@@ -132,10 +134,11 @@ def check_existing_reminders_handler(message):
         bot.send_message(user_id, text2)
 
 def check_today_reminders_handler(message):
+    delete_expired_reminders()
     user_id = (message.chat.id,) 
-    today_date_obj = datetime.utcnow().date()
+    today_date_obj = datetime.now().date()
     today_date = str(today_date_obj.strftime('%d.%m.%Y'))
-    tasks = find_task(user_id)
+    tasks = find_task(message.chat.id)
     task_list = []
     for task in tasks:
         event_name, event_time = task
